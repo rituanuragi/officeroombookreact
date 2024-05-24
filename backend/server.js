@@ -25,7 +25,7 @@ db.once("open", () => {
 const roomBookingSchema = new mongoose.Schema({
   name: String,
   department: String,
-  date: Date,
+  date: String, // Change this to String to ensure we save formatted date only
   checkin: String,
   checkout: String,
   purpose: String,
@@ -65,7 +65,7 @@ app.get("/export-to-excel", async (req, res) => {
       id: booking._id,
       name: booking.name,
       department: booking.department,
-      date: moment(booking.date).format("YYYY-MM-DD"),
+      date: booking.date, // Already formatted correctly
       checkin: booking.checkin,
       checkout: booking.checkout,
       purpose: booking.purpose,
@@ -105,7 +105,7 @@ function sendConfirmationEmail(
     from: "rituanuragi1@gmail.com",
     to: "rituf2fintech@gmail.com",
     subject: "Thanks For Informing, HR TEAM",
-    tmext:
+    text:
       `Name: ${name}\n` +
       `Message: ${message}\n` +
       `Department: ${department}\n` +
@@ -170,42 +170,38 @@ app.post("/", async function (req, res) {
 app.get("/bookings", async (req, res) => {
   try {
     const bookings = await RoomBooking.find();
-    res.json(bookings);
+    // Ensure date is formatted correctly when sending back to client
+    const formattedBookings = bookings.map((booking) => ({
+      ...booking._doc,
+      date: moment(booking.date).format("YYYY-MM-DD"),
+    }));
+    res.json(formattedBookings);
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 });
 
-app.put("/bookings/:id", function (req, res) {
+// Route to update checkout time
+app.put("/bookings/:id", async (req, res) => {
   const bookingId = req.params.id;
   const { checkout } = req.body;
 
-  RoomBooking.findByIdAndUpdate(
-    bookingId,
-    { checkout },
-    { new: true },
-    (err, updatedBooking) => {
-      if (err) {
-        console.error("Error updating checkout time in database:", err);
-        res.status(500).send("An error occurred while updating checkout time.");
-        return;
-      }
-      res.status(200).send("Checkout time updated successfully.");
-    }
-  );
-});
+  try {
+    const updatedBooking = await RoomBooking.findByIdAndUpdate(
+      bookingId,
+      { checkout }, // Update checkout time
+      { new: true } // Return the updated document
+    );
 
-app.delete("/bookings/:id", function (req, res) {
-  const bookingId = req.params.id;
-
-  RoomBooking.findByIdAndDelete(bookingId, (err) => {
-    if (err) {
-      console.error("Error deleting booking from database:", err);
-      res.status(500).send("An error occurred while deleting booking.");
-      return;
+    if (!updatedBooking) {
+      return res.status(404).send("Booking not found.");
     }
-    res.status(200).send("Booking deleted successfully.");
-  });
+
+    res.status(200).json(updatedBooking); // Return the updated booking
+  } catch (error) {
+    console.error("Error updating checkout time in database:", error);
+    res.status(500).send("An error occurred while updating checkout time.");
+  }
 });
 
 app.listen(5500, function () {
